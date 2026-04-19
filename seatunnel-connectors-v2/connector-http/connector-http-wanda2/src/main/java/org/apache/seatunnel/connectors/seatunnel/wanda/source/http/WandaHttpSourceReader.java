@@ -15,12 +15,16 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.connectors.seatunnel.http.source;
+package org.apache.seatunnel.connectors.seatunnel.wanda.source.http;
 
-import org.apache.seatunnel.shade.com.fasterxml.jackson.core.type.TypeReference;
-import org.apache.seatunnel.shade.com.google.common.annotations.VisibleForTesting;
-import org.apache.seatunnel.shade.com.google.common.base.Strings;
-
+import com.jayway.jsonpath.Configuration;
+import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.Option;
+import com.jayway.jsonpath.ReadContext;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.MapUtils;
 import org.apache.seatunnel.api.serialization.DeserializationSchema;
 import org.apache.seatunnel.api.source.Boundedness;
 import org.apache.seatunnel.api.source.Collector;
@@ -36,37 +40,28 @@ import org.apache.seatunnel.connectors.seatunnel.http.config.JsonField;
 import org.apache.seatunnel.connectors.seatunnel.http.config.PageInfo;
 import org.apache.seatunnel.connectors.seatunnel.http.exception.HttpConnectorErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.http.exception.HttpConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.http.source.DeserializationCollector;
 import org.apache.seatunnel.connectors.seatunnel.http.util.JsonPathProcessorFactory;
 import org.apache.seatunnel.connectors.seatunnel.http.util.JsonPathUtils;
-
-import org.apache.commons.collections4.MapUtils;
-
-import com.jayway.jsonpath.Configuration;
-import com.jayway.jsonpath.JsonPath;
-import com.jayway.jsonpath.Option;
-import com.jayway.jsonpath.ReadContext;
-import lombok.Setter;
-import lombok.extern.slf4j.Slf4j;
+import org.apache.seatunnel.shade.com.fasterxml.jackson.core.type.TypeReference;
+import org.apache.seatunnel.shade.com.google.common.annotations.VisibleForTesting;
+import org.apache.seatunnel.shade.com.google.common.base.Strings;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 
 @Slf4j
 @Setter
-public class HttpSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
+@Getter
+public class WandaHttpSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
     protected final SingleSplitReaderContext context;
     protected final HttpParameter httpParameter;
     protected HttpClientProvider httpClient;
     private final DeserializationCollector deserializationCollector;
     private static final Option[] DEFAULT_OPTIONS = {
-        Option.SUPPRESS_EXCEPTIONS, Option.ALWAYS_RETURN_LIST, Option.DEFAULT_PATH_LEAF_TO_NULL
+            Option.SUPPRESS_EXCEPTIONS, Option.ALWAYS_RETURN_LIST, Option.DEFAULT_PATH_LEAF_TO_NULL
     };
     private JsonPath[] jsonPaths;
     private final JsonField jsonField;
@@ -75,14 +70,13 @@ public class HttpSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
             Configuration.defaultConfiguration().addOptions(DEFAULT_OPTIONS);
     private boolean noMoreElementFlag = true;
     private Optional<PageInfo> pageInfoOptional = Optional.empty();
-    private boolean contentKeyTolowercase = false;
     /**
      * Holds the original request body template for placeholder replacement. This ensures that the
      * state is not unintentionally mutated during pagination.
      */
     private String rawBody = null;
 
-    public HttpSourceReader(
+    public WandaHttpSourceReader(
             HttpParameter httpParameter,
             SingleSplitReaderContext context,
             DeserializationSchema<SeaTunnelRow> deserializationSchema,
@@ -96,7 +90,7 @@ public class HttpSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
         this.rawBody = httpParameter.getBody();
     }
 
-    public HttpSourceReader(
+    public WandaHttpSourceReader(
             HttpParameter httpParameter,
             SingleSplitReaderContext context,
             DeserializationSchema<SeaTunnelRow> deserializationSchema,
@@ -110,23 +104,6 @@ public class HttpSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
         this.contentJson = contentJson;
         this.pageInfoOptional = Optional.ofNullable(pageInfo);
         this.rawBody = httpParameter.getBody();
-    }
-
-    public HttpSourceReader(
-            HttpParameter httpParameter,
-            SingleSplitReaderContext context,
-            DeserializationSchema<SeaTunnelRow> deserializationSchema,
-            JsonField jsonField,
-            String contentJson,
-            PageInfo pageInfo, boolean contentKeyTolowercase) {
-        this.context = context;
-        this.httpParameter = httpParameter;
-        this.deserializationCollector = new DeserializationCollector(deserializationSchema);
-        this.jsonField = jsonField;
-        this.contentJson = contentJson;
-        this.pageInfoOptional = Optional.ofNullable(pageInfo);
-        this.rawBody = httpParameter.getBody();
-        this.contentKeyTolowercase = contentKeyTolowercase;
     }
 
     @Override
@@ -145,7 +122,7 @@ public class HttpSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
         HttpResponse response = executeRequest();
         if (response.getCode() >= 200 && response.getCode() <= 207) {
             String content = response.getContent();
-            if (!Strings.isNullOrEmpty(content)) {
+            if (!org.apache.seatunnel.shade.com.google.common.base.Strings.isNullOrEmpty(content)) {
                 if (this.httpParameter.isEnableMultilines()) {
                     StringReader stringReader = new StringReader(content);
                     BufferedReader bufferedReader = new BufferedReader(stringReader);
@@ -236,7 +213,7 @@ public class HttpSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
         }
 
         // 2. param in body
-        if (!Strings.isNullOrEmpty(this.rawBody)) {
+        if (!org.apache.seatunnel.shade.com.google.common.base.Strings.isNullOrEmpty(this.rawBody)) {
             String processedBody =
                     processBodyString(
                             this.rawBody, pageField, pageValue, usePlaceholderReplacement);
@@ -306,7 +283,7 @@ public class HttpSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
             String pageField,
             Object pageValue,
             boolean usePlaceholderReplacement) {
-        if (pageField == null || pageValue == null || Strings.isNullOrEmpty(bodyString)) {
+        if (pageField == null || pageValue == null || org.apache.seatunnel.shade.com.google.common.base.Strings.isNullOrEmpty(bodyString)) {
             return bodyString;
         }
         if (usePlaceholderReplacement) {
@@ -403,9 +380,6 @@ public class HttpSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
         String contentData = data;
         if (contentJson != null) {
             contentData = JsonUtils.stringToJsonNode(getPartOfJson(data)).toString();
-            if (contentKeyTolowercase) {
-                contentData = JsonUtils.keysToLowercase(contentData);
-            }
         }
         if (jsonField != null && contentJson == null) {
             this.initJsonPath(jsonField);

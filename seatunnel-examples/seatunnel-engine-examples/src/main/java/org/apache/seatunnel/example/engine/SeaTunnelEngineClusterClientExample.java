@@ -28,8 +28,8 @@ import java.util.Collections;
 public class SeaTunnelEngineClusterClientExample {
 
     public static void main(String[] args) throws Exception {
-        String id = "834720088434147329";
-        String configurePath = "/examples/fake_to_console.conf";
+        String id = "";
+        String configurePath = "/examples/wanda_check.conf";
 
         submit(configurePath, id);
 
@@ -53,7 +53,7 @@ public class SeaTunnelEngineClusterClientExample {
         clientCommandArgs.setCheckConfig(false);
         clientCommandArgs.setJobName(Paths.get(configFile).getFileName().toString());
         clientCommandArgs.setAsync(true);
-        clientCommandArgs.setCustomJobId(id);
+//        clientCommandArgs.setCustomJobId(id);
         SeaTunnel.run(clientCommandArgs.buildCommand());
     }
 

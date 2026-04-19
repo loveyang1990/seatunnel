@@ -37,4 +37,9 @@ public class PageInfo implements Serializable {
     private String pageCursorFieldName;
     private String pageCursorResponseField;
     private boolean usePlaceholderReplacement = false;
+
+    /**
+     * 动态获取总页数
+     */
+    private String dynamPagesumField;
 }

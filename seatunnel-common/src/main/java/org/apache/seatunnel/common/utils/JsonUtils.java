@@ -316,4 +316,50 @@ public class JsonUtils {
             return false;
         }
     }
+
+    /**
+     * Convert all keys in the JSON string to lowercase.
+     *
+     * @param jsonString the JSON string to process
+     * @return JSON string with all keys converted to lowercase
+     */
+    public static String keysToLowercase(String jsonString) {
+        if (StringUtils.isEmpty(jsonString)) {
+            return jsonString;
+        }
+        try {
+            JsonNode jsonNode = OBJECT_MAPPER.readTree(jsonString);
+            JsonNode lowerCaseNode = convertKeysToLowercase(jsonNode);
+            return OBJECT_MAPPER.writeValueAsString(lowerCaseNode);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to convert JSON keys to lowercase", e);
+        }
+    }
+
+    /**
+     * Recursively convert all keys in a JsonNode to lowercase.
+     *
+     * @param node the JsonNode to process
+     * @return a new JsonNode with all keys converted to lowercase
+     */
+    private static JsonNode convertKeysToLowercase(JsonNode node) {
+        if (node.isObject()) {
+            ObjectNode newObject = OBJECT_MAPPER.createObjectNode();
+            node.fields()
+                    .forEachRemaining(
+                            field -> {
+                                String lowerCaseKey = field.getKey().toLowerCase();
+                                JsonNode processedValue = convertKeysToLowercase(field.getValue());
+                                newObject.set(lowerCaseKey, processedValue);
+                            });
+            return newObject;
+        } else if (node.isArray()) {
+            ArrayNode newArray = OBJECT_MAPPER.createArrayNode();
+            for (JsonNode element : node) {
+                newArray.add(convertKeysToLowercase(element));
+            }
+            return newArray;
+        }
+        return node;
+    }
 }
